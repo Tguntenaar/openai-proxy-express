@@ -1,1 +1,4 @@
-# openai-proxy-express
+# Unauthenticated Openai Proxy built with Express
+
+- [x] Cors policy
+- [ ] Custom authentication
