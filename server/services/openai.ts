@@ -26,15 +26,15 @@ export class OpenAIService {
       ...body,
       model: body.model || "gpt-4o",
       stream: true
-    });
+    }) as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
     try {
-      for await (const chunk of stream) {
-        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-        // Ensure the chunk is sent immediately
-        if (res.socket?.writable) {
-          res.socket.write('');
-        }
+      for await (const part of stream) {
+        res.write(`data: ${JSON.stringify(part)}\n\n`);
       }
     } catch (error) {
       console.error('Streaming error:', error);
