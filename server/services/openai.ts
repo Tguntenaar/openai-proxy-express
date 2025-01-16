@@ -5,7 +5,10 @@ export class OpenAIService {
   private openai: OpenAI;
 
   constructor() {
-    // the newest OpenAI model is "gpt-4o" which was released May 13, 2024
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY environment variable is not set");
+    }
+    
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY
     });
