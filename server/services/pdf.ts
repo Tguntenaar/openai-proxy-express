@@ -1,158 +1,117 @@
 import PDFDocument from 'pdfkit';
-import { Document, Paragraph, TextRun, Packer, HeadingLevel } from 'docx';
+import { marked } from 'marked';
+import type { Token, Tokens } from 'marked';
+import { PassThrough } from 'stream';
 
 export class DocumentService {
   /**
-   * Generates a PDF document for the resume
+   * Generates a PDF document from markdown text
+   * @param markdownText The markdown text to convert to PDF
    * @returns A readable stream of the PDF document
    */
-  public generatePDF(text: string): PDFKit.PDFDocument {
-    const doc = new PDFDocument({ margin: 50 });
+  public generatePDF(markdownText: string): PDFKit.PDFDocument {
+    const doc = new PDFDocument({
+      margin: 50,
+      size: 'A4',
+      autoFirstPage: true,
+      bufferPages: true
+    });
 
-    // Header (Name and Contact Info)
-    doc.fontSize(18).text('STUDENT NAME', { align: 'center', underline: true });
-    doc.moveDown(0.5);
-    doc.fontSize(12).text('134 Street Name, City, State 12345', { align: 'center' });
-    doc.text('youremail@gmail.com | 123-456-7890', { align: 'center' });
+    // Create a write stream to capture any errors
+    const stream = new PassThrough();
+    doc.pipe(stream);
 
-    doc.moveDown(1);
+    // Parse markdown to HTML tokens
+    const tokens = marked.lexer(markdownText);
+    
+    let currentY = doc.y;
+    const pageHeight = doc.page.height - doc.page.margins.bottom;
 
-    // Sections
-    this.addPDFSection(doc, 'Education', [
-      'High School Name, location of school\nExpected Date of Graduation',
-      'GPA:\nClass Rank or ACT/SAT:\nHonors:',
-    ]);
+    // Process each token and render to PDF
+    tokens.forEach((token: Token) => {
+      // Check if we need a new page
+      if (currentY > pageHeight - 100) {
+        doc.addPage();
+        currentY = doc.page.margins.top;
+      }
 
-    this.addPDFSection(doc, 'Work Experience', [
-      'Name of Company/Employer, Your title or job (Date Started - Date Ended)\n• Description of your role and responsibilities',
-      'Name of Organization, Your title or position (Date Joined - Date Stopped)\n• Description of your role and what organization is',
-    ]);
+      switch (token.type) {
+        case 'heading': {
+          const headingToken = token as Tokens.Heading;
+          const fontSize = this.getFontSizeForHeading(headingToken.depth);
+          doc.fontSize(fontSize);
+          doc.font('Helvetica-Bold')
+             .text(headingToken.text)
+             .moveDown(0.5);
+          doc.font('Helvetica'); // Reset font
+          break;
+        }
 
-    this.addPDFSection(doc, 'Leadership Experience', [
-      'Name of Organization, Your title or position (Date Joined - Date Stopped)\n• Description of your role and what organization is',
-    ]);
+        case 'paragraph': {
+          const paragraphToken = token as Tokens.Paragraph;
+          doc.fontSize(12)
+             .text(paragraphToken.text, {
+               width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+               align: 'left'
+             })
+             .moveDown(0.5);
+          break;
+        }
 
-    this.addPDFSection(doc, 'Service and Outreach', [
-      'Name of Organization, Your title or position (Date Joined - Date Stopped)\n• Description of your role and what organization is',
-    ]);
+        case 'list': {
+          const listToken = token as Tokens.List;
+          listToken.items.forEach((item: Tokens.ListItem) => {
+            doc.fontSize(12)
+               .text('• ' + item.text, {
+                 indent: 20,
+                 width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20
+               })
+               .moveDown(0.2);
+          });
+          doc.moveDown(0.5);
+          break;
+        }
 
-    this.addPDFSection(doc, 'Extracurricular Involvement', [
-      'Name of Organization, Your title or position (Date Joined - Date Stopped)\n• Description of your role and what organization is',
-    ]);
+        case 'code': {
+          const codeToken = token as Tokens.Code;
+          doc.fontSize(11)
+             .font('Courier')
+             .text(codeToken.text, {
+               width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+               align: 'left'
+             })
+             .moveDown(0.5);
+          doc.font('Helvetica'); // Reset font
+          break;
+        }
 
-    this.addPDFSection(doc, 'Interests and Skills', [
-      '• Fluent in Microsoft Tools',
-      '• Skilled in Canva graphic design',
-      '• Bilingual in French and English (native French)',
-      '• Interested in chocolate chip cookies, traveling to Europe, reading Harry Potter, and paddleboarding',
-    ]);
+        case 'hr':
+          doc.moveTo(doc.page.margins.left, currentY)
+             .lineTo(doc.page.width - doc.page.margins.right, currentY)
+             .stroke()
+             .moveDown(1);
+          break;
+      }
 
+      currentY = doc.y;
+    });
+
+    // Finalize the PDF
+    doc.flushPages();
     doc.end();
+
     return doc;
   }
 
-  /**
-   * Adds a section to the PDF
-   * @param doc The PDF document
-   * @param title The title of the section
-   * @param content Array of strings representing section content
-   */
-  private addPDFSection(doc: PDFKit.PDFDocument, title: string, content: string[]) {
-    doc.fontSize(14).text(title, { underline: true });
-    doc.moveDown(0.5);
-
-    doc.fontSize(12);
-    content.forEach((line) => {
-      doc.text(line, { indent: 20, lineGap: 5 });
-    });
-
-    doc.moveDown(1);
-  }
-
-  /**
-   * Generates a DOCX document for the resume
-   * @returns A Buffer containing the DOCX document
-   */
-  public async generateDOCX(text: string): Promise<Buffer> {
-    const doc = new Document({
-      sections: [
-        {
-          children: [
-            ...this.createDocxHeader('STUDENT NAME', '134 Street Name, City, State 12345\nyouremail@gmail.com | 123-456-7890'),
-
-            ...this.createDocxSection('Education', [
-              'High School Name, location of school\nExpected Date of Graduation',
-              'GPA:\nClass Rank or ACT/SAT:\nHonors:',
-            ]),
-
-            ...this.createDocxSection('Work Experience', [
-              'Name of Company/Employer, Your title or job (Date Started - Date Ended)\n• Description of your role and responsibilities',
-              'Name of Organization, Your title or position (Date Joined - Date Stopped)\n• Description of your role and what organization is',
-            ]),
-
-            ...this.createDocxSection('Leadership Experience', [
-              'Name of Organization, Your title or position (Date Joined - Date Stopped)\n• Description of your role and what organization is',
-            ]),
-
-            ...this.createDocxSection('Service and Outreach', [
-              'Name of Organization, Your title or position (Date Joined - Date Stopped)\n• Description of your role and what organization is',
-            ]),
-
-            ...this.createDocxSection('Extracurricular Involvement', [
-              'Name of Organization, Your title or position (Date Joined - Date Stopped)\n• Description of your role and what organization is',
-            ]),
-
-            ...this.createDocxSection('Interests and Skills', [
-              '• Fluent in Microsoft Tools',
-              '• Skilled in Canva graphic design',
-              '• Bilingual in French and English (native French)',
-              '• Interested in chocolate chip cookies, traveling to Europe, reading Harry Potter, and paddleboarding',
-            ]),
-          ],
-        },
-      ],
-    });
-
-    return await Packer.toBuffer(doc);
-  }
-
-  /**
-   * Creates a header for the DOCX document
-   */
-  private createDocxHeader(name: string, contact: string): Paragraph[] {
-    return [
-      new Paragraph({
-        text: name,
-        heading: HeadingLevel.TITLE,
-        alignment: 'center',
-      }),
-      new Paragraph({
-        text: contact,
-        alignment: 'center',
-      }),
-    ];
-  }
-
-  /**
-   * Creates a section for the DOCX document
-   */
-  private createDocxSection(title: string, content: string[]): Paragraph[] {
-    const section = [
-      new Paragraph({
-        text: title,
-        heading: HeadingLevel.HEADING_1,
-      }),
-    ];
-
-    content.forEach((line) => {
-      section.push(
-        new Paragraph({
-          text: line,
-          bullet: { level: 0 },
-        })
-      );
-    });
-
-    return section;
+  private getFontSizeForHeading(depth: number): number {
+    switch (depth) {
+      case 1: return 24;
+      case 2: return 20;
+      case 3: return 16;
+      case 4: return 14;
+      case 5: return 12;
+      case 6: return 11;
+      default: return 12;
+    }
   }
 }

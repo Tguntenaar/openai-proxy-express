@@ -22,7 +22,47 @@ export function registerRoutes(app: Express): Server {
     res.json({ message: 'API is working' });
   });
 
-  // Apply middleware
+  // PDF endpoint without auth
+  app.post("/api/v1/documents/pdf", async (req, res) => {
+    try {
+      const { markdown } = req.body;
+      if (!markdown) {
+        return res.status(400).json({
+          error: {
+            message: "Missing required field: markdown",
+            type: "invalid_request_error"
+          }
+        });
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=document.pdf');
+      
+      const doc = documentService.generatePDF(markdown);
+      
+      // Handle any errors in the PDF generation
+      doc.on('error', (err) => {
+        console.error('Error generating PDF:', err);
+        res.status(500).json({
+          error: {
+            message: "An error occurred generating PDF",
+            type: "internal_server_error",
+          }
+        });
+      });
+
+      doc.pipe(res);
+    } catch (error: any) {
+      res.status(error.status || 500).json({
+        error: {
+          message: error.message || "An error occurred generating PDF",
+          type: error.type || "internal_server_error",
+        }
+      });
+    }
+  });
+
+  // Apply middleware for protected routes
   app.use("/api", corsMiddleware);
   app.use("/api", rateLimiterMiddleware);
   app.use("/api", validateApiKeyMiddleware);
@@ -98,60 +138,6 @@ export function registerRoutes(app: Express): Server {
       res.status(error.status || 500).json({
         error: {
           message: error.message || "An error occurred during chat completion",
-          type: error.type || "internal_server_error",
-        }
-      });
-    }
-  });
-
-  app.post("/api/v1/documents/pdf", async (req, res) => {
-    try {
-      const { text } = req.body;
-      if (!text) {
-        return res.status(400).json({
-          error: {
-            message: "Missing required field: text",
-            type: "invalid_request_error"
-          }
-        });
-      }
-
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename=document.pdf');
-      
-      const pdfStream = documentService.generatePDF(text);
-      pdfStream.pipe(res);
-    } catch (error: any) {
-      res.status(error.status || 500).json({
-        error: {
-          message: error.message || "An error occurred generating PDF",
-          type: error.type || "internal_server_error",
-        }
-      });
-    }
-  });
-
-  app.post("/api/v1/documents/docx", async (req, res) => {
-    try {
-      const { text } = req.body;
-      if (!text) {
-        return res.status(400).json({
-          error: {
-            message: "Missing required field: text",
-            type: "invalid_request_error"
-          }
-        });
-      }
-
-      const buffer = await documentService.generateDOCX(text);
-      
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      res.setHeader('Content-Disposition', 'attachment; filename=document.docx');
-      res.send(buffer);
-    } catch (error: any) {
-      res.status(error.status || 500).json({
-        error: {
-          message: error.message || "An error occurred generating DOCX",
           type: error.type || "internal_server_error",
         }
       });
