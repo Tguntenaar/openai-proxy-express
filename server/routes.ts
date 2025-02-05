@@ -17,6 +17,12 @@ export function registerRoutes(app: Express): Server {
   // Add console log to verify routes are being registered
   console.log('Registering routes...');
 
+  // Apply middleware for protected routes
+  app.use("/api", corsMiddleware);
+  app.use("/api", rateLimiterMiddleware);
+  app.use("/api", validateApiKeyMiddleware);
+  
+
   // Add test endpoint
   app.get('/api/v1/test', (_req, res) => {
     res.json({ message: 'API is working' });
@@ -63,11 +69,6 @@ export function registerRoutes(app: Express): Server {
       });
     }
   });
-
-  // Apply middleware for protected routes
-  app.use("/api", corsMiddleware);
-  app.use("/api", rateLimiterMiddleware);
-  app.use("/api", validateApiKeyMiddleware);
 
   app.post("/api/v1/chat/completions", async (req, res) => {
     try {

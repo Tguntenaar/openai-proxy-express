@@ -10,7 +10,13 @@ export const corsMiddleware = cors({
     }
   },
   methods: ["POST", "GET", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: [
+    "Content-Type", 
+    "Authorization",
+    "Accept",
+    "Content-Disposition"  // Add this for PDF downloads
+  ],
+  exposedHeaders: ["Content-Disposition"],  // Add this to expose the download header
   credentials: true,
-  maxAge: 86400 // 24 hours
+  maxAge: 86400
 });
