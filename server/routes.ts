@@ -35,9 +35,6 @@ export function registerRoutes(app: Express): Server {
         });
       }
 
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename=document.pdf');
-      
       const doc = documentService.generatePDF(markdown);
       
       // Handle any errors in the PDF generation
@@ -51,7 +48,12 @@ export function registerRoutes(app: Express): Server {
         });
       });
 
+      // Set proper headers for PDF download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="document.pdf"');
+      
       doc.pipe(res);
+      doc.end(); // Make sure to end the document
     } catch (error: any) {
       res.status(error.status || 500).json({
         error: {
