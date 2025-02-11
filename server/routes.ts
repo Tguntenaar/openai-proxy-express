@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import rateLimit from "express-rate-limit";
 import { corsMiddleware } from "./middleware/cors";
 import { rateLimiterMiddleware } from "./middleware/rateLimiter";
 import { validateApiKeyMiddleware } from "./middleware/validateApiKey";
@@ -29,44 +28,54 @@ export function registerRoutes(app: Express): Server {
   });
 
   // PDF endpoint without auth
-  app.post("/api/v1/documents/pdf", async (req, res) => {
+  app.post("/api/v1/documents/pdf", (req, res) => {
     try {
       const { markdown } = req.body;
       if (!markdown) {
         return res.status(400).json({
           error: {
             message: "Missing required field: markdown",
-            type: "invalid_request_error"
-          }
+            type: "invalid_request_error",
+          },
         });
       }
 
       const doc = documentService.generatePDF(markdown);
-      
-      // Handle any errors in the PDF generation
-      doc.on('error', (err) => {
-        console.error('Error generating PDF:', err);
-        res.status(500).json({
-          error: {
-            message: "An error occurred generating PDF",
-            type: "internal_server_error",
-          }
-        });
-      });
 
       // Set proper headers for PDF download
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename="document.pdf"');
-      
-      doc.pipe(res);
-      doc.end(); // Make sure to end the document
-    } catch (error: any) {
-      res.status(error.status || 500).json({
-        error: {
-          message: error.message || "An error occurred generating PDF",
-          type: error.type || "internal_server_error",
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", 'attachment; filename="document.pdf"');
+
+      // Handle any errors in the PDF generation
+      doc.on("error", (err) => {
+        console.error("Error generating PDF:", err);
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: {
+              message: "An error occurred generating PDF",
+              type: "internal_server_error",
+            },
+          });
+        } else {
+          res.end();
         }
       });
+
+      // Pipe the document to the response
+      doc.pipe(res);
+
+      // Finalize the PDF and end the stream
+      doc.end();
+    } catch (error: any) {
+      // Only send error response if headers haven't been sent yet
+      if (!res.headersSent) {
+        res.status(error.status || 500).json({
+          error: {
+            message: error.message || "An error occurred generating PDF",
+            type: error.type || "internal_server_error",
+          },
+        });
+      }
     }
   });
 

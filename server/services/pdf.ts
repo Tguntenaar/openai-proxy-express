@@ -40,33 +40,29 @@ export class DocumentService {
           const headingToken = token as Tokens.Heading;
           const fontSize = this.getFontSizeForHeading(headingToken.depth);
           doc.fontSize(fontSize);
-          doc.font('Helvetica-Bold')
-             .text(headingToken.text)
-             .moveDown(0.5);
+          doc.font('Helvetica-Bold');
+          this.renderBoldText(headingToken.text, doc);
+          doc.moveDown(0.5);
           doc.font('Helvetica'); // Reset font
           break;
         }
 
         case 'paragraph': {
           const paragraphToken = token as Tokens.Paragraph;
-          doc.fontSize(12)
-             .text(paragraphToken.text, {
-               width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
-               align: 'left'
-             })
-             .moveDown(0.5);
+          this.renderBoldText(paragraphToken.text, doc);
+          doc.text('', { continued: false }).moveDown(0.5);
           break;
         }
 
         case 'list': {
           const listToken = token as Tokens.List;
           listToken.items.forEach((item: Tokens.ListItem) => {
-            doc.fontSize(12)
-               .text('• ' + item.text, {
-                 indent: 20,
-                 width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20
-               })
-               .moveDown(0.2);
+            doc.fontSize(12);
+            this.renderBoldText('• ' + item.text, doc, {
+              indent: 20,
+              width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 20
+            });
+            doc.moveDown(0.2);
           });
           doc.moveDown(0.5);
           break;
@@ -113,5 +109,32 @@ export class DocumentService {
       case 6: return 11;
       default: return 12;
     }
+  }
+
+  /**
+   * Processes bold text in a string and renders it to the PDF
+   * @param text The text to process
+   * @param doc The PDF document
+   * @param options Additional PDFKit text options
+   */
+  private renderBoldText(text: string, doc: PDFKit.PDFDocument, options: PDFKit.Mixins.TextOptions = {}) {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    
+    parts.forEach((part, index) => {
+      const isLast = index === parts.length - 1;
+      if (part.startsWith('**') && part.endsWith('**')) {
+        doc.font('Helvetica-Bold')
+           .text(part.slice(2, -2), {
+             ...options,
+             continued: !isLast
+           });
+        doc.font('Helvetica');
+      } else if (part) {
+        doc.text(part, {
+          ...options,
+          continued: !isLast
+        });
+      }
+    });
   }
 }
